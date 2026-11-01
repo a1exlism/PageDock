@@ -19,6 +19,8 @@ let view;
 let overlay = false;
 let failure = '';
 let quitting = false;
+let sidebarCollapsed = false;
+const sidebarExpandedWidth = 244;
 const popups = new Set();
 const guests = new Set();
 const uiURL = pathToFileURL(path.join(__dirname, 'ui', 'index.html')).href;
@@ -48,6 +50,7 @@ function currentState() {
   return {
     ...store.state,
     resolvedTheme: resolvedTheme(),
+    sidebarWidth: sidebarCollapsed ? 0 : sidebarExpandedWidth,
     url: wc && !wc.isDestroyed() ? wc.getURL() || active?.url || '' : '',
     loading: wc && !wc.isDestroyed() ? wc.isLoading() : false,
     canBack: wc && !wc.isDestroyed() ? wc.navigationHistory.canGoBack() : false,
@@ -70,7 +73,8 @@ function updateAppearance() {
 function layout() {
   if (!view || !win) return;
   const [width, height] = win.getContentSize();
-  view.setBounds({ x: 244, y: 88, width: Math.max(1, width - 244), height: Math.max(1, height - 88) });
+  const sidebarWidth = sidebarCollapsed ? 0 : sidebarExpandedWidth;
+  view.setBounds({ x: sidebarWidth, y: 88, width: Math.max(1, width - sidebarWidth), height: Math.max(1, height - 88) });
   view.setVisible(!overlay && !failure);
 }
 
@@ -108,6 +112,7 @@ function openSite(id) {
   releaseView();
   failure = '';
   const site = store.state.sites.find(item => item.id === id);
+  sidebarCollapsed = Boolean(site);
   if (!site) {
     win.setTitle(app.name);
     emitState();
@@ -164,6 +169,12 @@ function registerIPC() {
   });
   const actions = {
     state: () => currentState(),
+    sidebar: () => {
+      sidebarCollapsed = store.state.activeId ? !sidebarCollapsed : false;
+      layout();
+      emitState();
+      return currentState();
+    },
     theme: (_event, theme) => {
       store.setTheme(theme);
       updateAppearance();
@@ -207,6 +218,7 @@ function registerIPC() {
 
 function createWindow() {
   overlay = false;
+  sidebarCollapsed = Boolean(store.state.activeId);
   win = new BrowserWindow({
     width: 1240, height: 820, minWidth: 860, minHeight: 600, title: app.name,
     titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 20, y: 22 },
