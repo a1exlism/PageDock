@@ -1,0 +1,28 @@
+{
+  "name": "webpage-app",
+  "productName": "PageDock",
+  "version": "1.2.0",
+  "private": true,
+  "description": "在独立的 macOS App 中保存并打开常用网页",
+  "main": "main.cjs",
+  "files": [
+    "guest-preload.cjs",
+    "model.cjs",
+    "preload.cjs",
+    "ui/app.js",
+    "ui/index.html",
+    "ui/style.css",
+    "ui/theme.css"
+  ],
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/model.test.cjs",
+    "test:app": "node test/app.cjs",
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "@electron/packager": "20.3.0",
+    "electron": "45.2.1",
+    "playwright": "1.64.1"
+  }
+}

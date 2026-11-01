@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>PageDock</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="theme.css">
+</head>
+<body>
+  <svg class="sprite" aria-hidden="true"><defs>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="m14 6-6 6 6 6"/></symbol>
+    <symbol id="i-forward" viewBox="0 0 24 24"><path d="m10 6 6 6-6 6"/></symbol>
+    <symbol id="i-reload" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2 6M20 4v7h-7"/></symbol>
+    <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M10 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-5"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0 0-3l-1-1a2 2 0 0 0-3 0L5 15z"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></symbol>
+    <symbol id="i-page" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 9h18M7 6.5h.01M10 6.5h.01M9 13l-2 2 2 2M15 13l2 2-2 2"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M4 12h16m-6-6 6 6-6 6"/></symbol>
+  </defs></svg>
+  <aside class="sidebar">
+    <div class="traffic-space"></div>
+    <button id="brand" class="brand" title="返回页面概览"><span class="brand-mark"><svg><use href="#i-page"/></svg></span><span>PageDock<small>YOUR WEB, IN ONE PLACE</small></span></button>
+    <div class="sidebar-body">
+      <button id="overview" class="overview selected"><svg><use href="#i-grid"/></svg>页面概览<span id="count">0</span></button>
+      <label class="search"><svg><use href="#i-search"/></svg><input id="search" placeholder="查找页面" aria-label="查找页面" autocomplete="off"></label>
+      <div class="section-label">我的页面</div>
+      <nav id="sites" aria-label="已保存的页面"></nav>
+      <p id="sidebar-empty" class="sidebar-empty">常用页面会显示在这里</p>
+    </div>
+    <div class="sidebar-bottom">
+      <button id="add" class="add-button"><svg><use href="#i-plus"/></svg>新增页面<span>⌘ N</span></button>
+      <div class="theme-label" id="plugins-label">页面插件</div>
+      <div class="plugin-picker" role="group" aria-labelledby="plugins-label">
+        <button data-plugin="vimium" aria-pressed="false" title="键盘浏览：j/k 滚动，f 链接提示，? 帮助。输入框内不拦截按键。"><span>Vimium Lite</span><i aria-hidden="true"></i></button>
+        <button data-plugin="toc" aria-pressed="false" title="根据网页标题生成可跳转的目录"><span>TOC 目录</span><i aria-hidden="true"></i></button>
+      </div>
+      <div class="theme-label" id="theme-label">外观</div>
+      <div class="theme-picker" role="group" aria-labelledby="theme-label">
+        <button data-theme="system" aria-pressed="true" title="跟随系统外观">自动</button>
+        <button data-theme="light" aria-pressed="false">浅色</button>
+        <button data-theme="dark" aria-pressed="false">深色</button>
+      </div>
+      <p><span class="status-dot"></span>独立运行 · 登录自动保留</p>
+    </div>
+  </aside>
+  <main>
+    <header class="toolbar">
+      <div id="overview-heading"><span class="eyebrow">WORKSPACE</span><h1>页面概览</h1></div>
+      <div id="browser-controls" hidden>
+        <div class="navigation"><button data-action="back" id="back" class="icon-button" title="后退" aria-label="后退"><svg><use href="#i-back"/></svg></button><button data-action="forward" id="forward" class="icon-button" title="前进" aria-label="前进"><svg><use href="#i-forward"/></svg></button><button data-action="reload" id="reload" class="icon-button" title="刷新" aria-label="刷新"><svg><use href="#i-reload"/></svg></button></div>
+        <div class="location"><strong id="page-name"></strong><span id="location"></span></div>
+        <button id="edit" class="icon-button" title="编辑页面" aria-label="编辑页面"><svg><use href="#i-edit"/></svg></button><button data-action="external" class="icon-button" title="在默认浏览器中打开" aria-label="在默认浏览器中打开"><svg><use href="#i-external"/></svg></button>
+      </div>
+      <button id="header-add" class="quiet-button"><svg><use href="#i-plus"/></svg>新增页面</button>
+      <div id="loading" class="loading" hidden></div>
+    </header>
+    <section id="welcome" class="welcome">
+      <div class="hero-mark"><svg><use href="#i-page"/></svg><span class="orbit"></span></div>
+      <p class="eyebrow">A LITTLE SPACE FOR YOUR WEB</p>
+      <h2>常用网页，<br><span>独立打开。</span></h2>
+      <p class="hero-copy">给网页一个名字，把它留在手边。<br>本地服务、工作面板，或每天都会打开的网站。</p>
+      <button id="hero-add" class="primary-button">添加第一个页面<svg><use href="#i-arrow"/></svg></button>
+      <div class="examples"><span>localhost</span><span>局域网</span><span>任何网站</span></div>
+      <div class="welcome-foot"><span>自己的窗口</span><i></i><span>自己的登录空间</span><i></i><span>专注眼前的页面</span></div>
+    </section>
+    <section id="library" class="library" hidden><div class="library-heading"><div><p class="eyebrow">SAVED PAGES</p><h2>从这里继续。</h2></div><p>选择页面，即刻打开</p></div><div id="cards" class="cards"></div></section>
+    <section id="failure" class="failure" hidden><span class="failure-icon">!</span><h2>暂时无法打开页面</h2><p>如果是本地地址，请确认对应服务已经启动，<br>并检查网址和端口。</p><code id="failure-detail"></code><div><button id="retry" class="primary-button">重新加载</button><button id="failure-edit" class="quiet-button">编辑网址</button></div></section>
+  </main>
+  <dialog id="editor" aria-labelledby="editor-title">
+    <form id="form" novalidate>
+      <div class="dialog-heading"><span class="eyebrow">YOUR NEXT PAGE</span><button type="button" id="close-editor" class="icon-button" aria-label="关闭"><svg><use href="#i-close"/></svg></button></div>
+      <h2 id="editor-title">新增页面</h2><p class="dialog-copy">保存名称和网址，下次从侧边栏直接打开。</p>
+      <label class="field">页面名称<input id="name-input" name="name" placeholder="例如：开发面板" maxlength="80" required autocomplete="off"></label>
+      <label class="field">网址<input id="url-input" name="url" placeholder="localhost:3000 或 https://example.com" required autocomplete="off" spellcheck="false"></label>
+      <p class="field-hint">本地地址会自动使用 HTTP，其他地址默认使用 HTTPS。</p>
+      <p id="form-error" class="form-error" role="alert"></p>
+      <div class="form-footer"><button type="button" id="remove" class="danger-button" hidden>移除页面</button><span></span><button type="button" id="cancel" class="quiet-button">取消</button><button id="save" type="submit" class="primary-button">保存并打开<svg><use href="#i-arrow"/></svg></button></div>
+      <p id="remove-note" class="remove-note" hidden>移除页面只删除列表条目，网站登录数据会保留。</p>
+    </form>
+  </dialog>
+  <div id="toast" class="toast" role="status" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>
