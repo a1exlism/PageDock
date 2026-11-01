@@ -39,6 +39,15 @@ function render(next) {
     button.setAttribute('aria-pressed', button.dataset.theme === state.theme ? 'true' : 'false');
   }
   const active = state.sites.find(site => site.id === state.activeId);
+  const collapsed = state.sidebarWidth === 0;
+  document.documentElement.style.setProperty('--sidebar-width', `${state.sidebarWidth}px`);
+  document.body.classList.toggle('sidebar-collapsed', collapsed);
+  document.body.classList.toggle('has-active-page', Boolean(active));
+  $('sidebar').hidden = collapsed;
+  $('sidebar-toggle').hidden = !active;
+  $('sidebar-toggle').setAttribute('aria-expanded', String(!collapsed));
+  $('sidebar-toggle').setAttribute('aria-label', collapsed ? '展开侧边栏' : '收起侧边栏');
+  $('sidebar-toggle').title = collapsed ? '展开侧边栏' : '收起侧边栏';
   for (const button of document.querySelectorAll('[data-plugin]')) {
     button.setAttribute('aria-pressed', String(state.plugins[button.dataset.plugin]));
   }
@@ -118,6 +127,7 @@ for (const id of ['cancel', 'close-editor']) $(id).addEventListener('click', clo
 for (const id of ['brand', 'overview']) $(id).addEventListener('click', () => select(null));
 $('editor').addEventListener('cancel', event => { event.preventDefault(); closeEditor(); });
 $('search').addEventListener('input', () => render(state));
+$('sidebar-toggle').addEventListener('click', () => window.pages.sidebar().then(render).catch(showError));
 for (const button of document.querySelectorAll('button[data-theme]')) {
   button.addEventListener('click', () => window.pages.theme(button.dataset.theme).then(render).catch(showError));
 }

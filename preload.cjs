@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('pages', {
   state: () => ipcRenderer.invoke('pages:state'),
+  sidebar: () => ipcRenderer.invoke('pages:sidebar'),
   theme: mode => ipcRenderer.invoke('pages:theme', mode),
   plugin: (name, enabled) => ipcRenderer.invoke('pages:plugin', name, enabled),
   save: site => ipcRenderer.invoke('pages:save', site),
