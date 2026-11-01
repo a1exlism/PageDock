@@ -48,7 +48,7 @@ if (process.isMainFrame) {
   }
 
   function trimHost() {
-    if (!options.toc && !helpOpen && hints.length === 0) {
+    if ((!options.toc || options.zen) && !helpOpen && hints.length === 0) {
       host?.remove();
       host = undefined;
       shadow = undefined;
@@ -70,7 +70,7 @@ if (process.isMainFrame) {
   }
 
   function refreshTOC() {
-    if (!options.toc) return;
+    if (!options.toc || options.zen) return;
     mount();
     headings = Array.from(document.querySelectorAll('h1,h2,h3,h4,h5,h6')).filter(element => visible(element) && element.textContent.trim());
     shadow.querySelector('.toc-toggle')?.remove();
@@ -116,7 +116,7 @@ if (process.isMainFrame) {
   }
 
   function markCurrentHeading() {
-    if (!options.toc || !tocOpen || !shadow) return;
+    if (!options.toc || options.zen || !tocOpen || !shadow) return;
     let active = 0;
     for (const [index, heading] of headings.entries()) {
       if (heading.getBoundingClientRect().top <= 110) active = index;
@@ -277,6 +277,8 @@ if (process.isMainFrame) {
 
   function applyOptions(next) {
     const wasTOC = options.toc;
+    const wasZen = options.zen;
+    if (next.zen && !wasZen) { clearHints(); hideHelp(); }
     options = next;
     const active = options.vimium || options.toc;
     if (active !== listening) {
@@ -288,8 +290,8 @@ if (process.isMainFrame) {
     }
     if (!options.vimium) { clearHints(); hideHelp(); gPending = false; clearTimeout(gTimer); }
     host?.setAttribute('data-theme', options.theme);
-    if (options.toc) {
-      if (!wasTOC) tocOpen = true;
+    if (options.toc && !wasTOC) tocOpen = true;
+    if (options.toc && !options.zen) {
       refreshTOC();
       observer.observe(document.documentElement, { subtree: true, childList: true, characterData: true });
     } else {

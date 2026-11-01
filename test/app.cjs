@@ -65,6 +65,17 @@ async function guestLayout() {
   });
 }
 
+async function zenShortcut(shell = false) {
+  await running.evaluate(({ BrowserWindow }, shell) => {
+    const win = BrowserWindow.getAllWindows().find(item => item.webContents.getURL().startsWith('file:'));
+    const target = shell ? win.webContents : win.contentView.children.find(item => /^https:\/\/(example\.com|en\.wikipedia\.org)\//.test(item.webContents?.getURL() || '')).webContents;
+    win.focus();
+    target.focus();
+    target.sendInputEvent({ type: 'keyDown', keyCode: 'Enter', modifiers: ['meta', 'shift'] });
+    target.sendInputEvent({ type: 'keyUp', keyCode: 'Enter', modifiers: ['meta', 'shift'] });
+  }, shell);
+}
+
 async function addPublicPage(page, name, url) {
   assert.ok([exampleURL, wikiURL].includes(url));
   await expandSidebar(page);
@@ -100,6 +111,8 @@ async function addSyntheticControls(page) {
   await expect(page.locator('#welcome')).toBeVisible();
   await expect(page.locator('#sidebar')).toBeVisible();
   await expect(page.locator('#sidebar-toggle')).toBeHidden();
+  await expect(page.locator('#zen-toggle')).toBeHidden();
+  assert.equal(await running.evaluate(({ Menu }) => Menu.getApplicationMenu().getMenuItemById('zen-mode').enabled), false);
   await expect(page.locator('button[data-theme="system"]')).toHaveAttribute('aria-pressed', 'true');
   const systemDark = await running.evaluate(({ nativeTheme }) => nativeTheme.shouldUseDarkColors);
   await page.screenshot({ path: path.join(out, 'welcome.png') });
@@ -146,6 +159,43 @@ async function addSyntheticControls(page) {
   assert.equal(await guest.evaluate(() => typeof require), 'undefined');
   assert.equal(await guest.evaluate(() => typeof window.pages), 'undefined');
   results.push('public example.com: default collapse, full-width viewport, resize, no reload or form loss, and unchanged website colors');
+
+  await page.click('[data-plugin="toc"]');
+  await expect(guest.getByRole('region', { name: '页面目录' })).toBeVisible();
+  await page.click('#zen-toggle');
+  await expect(page.locator('body')).toHaveClass(/zen-mode/);
+  await expect(page.locator('#sidebar')).toBeHidden();
+  await expect(page.locator('.toolbar')).toBeHidden();
+  await expect(page.locator('#sidebar-toggle')).toBeHidden();
+  await expect(page.getByRole('button', { name: '退出 Zen Mode', exact: true })).toBeVisible();
+  await expect(guest.locator('[data-pagedock-tools]')).toHaveCount(0);
+  const zen = await guestLayout();
+  assert.equal(zen.id, expanded.id);
+  assert.deepEqual(zen.bounds, { x: 0, y: 32, width: zen.size[0], height: zen.size[1] - 32 });
+  await expect.poll(() => guest.evaluate(() => innerHeight)).toBe(zen.size[1] - 32);
+  await expect(guest.getByRole('textbox', { name: 'Public typing field' })).toHaveValue('PUBLIC_TEST_ONLY');
+  assert.deepEqual(await colors(guest), originalColors);
+  await page.screenshot({ path: path.join(out, 'zen-shell.png') });
+  await guest.screenshot({ path: path.join(out, 'zen-page.png') });
+  await zenShortcut();
+  await expect(page.locator('body')).not.toHaveClass(/zen-mode/);
+  await expect(page.locator('#sidebar')).toBeVisible();
+  await expect(guest.getByRole('region', { name: '页面目录' })).toBeVisible();
+  assert.deepEqual((await guestLayout()).bounds, expanded.bounds);
+  await guest.getByRole('button', { name: '收起目录', exact: true }).click();
+  await page.click('#sidebar-toggle');
+  await zenShortcut(true);
+  await expect(page.locator('body')).toHaveClass(/zen-mode/);
+  await running.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(item => item.webContents.getURL().startsWith('file:')).setContentSize(1000, 700));
+  await expect.poll(async () => (await guestLayout()).bounds).toEqual({ x: 0, y: 32, width: 1000, height: 668 });
+  await running.evaluate(({ BrowserWindow }, size) => BrowserWindow.getAllWindows().find(item => item.webContents.getURL().startsWith('file:')).setContentSize(...size), zen.size);
+  await page.click('#zen-exit');
+  await expect(page.locator('#sidebar')).toBeHidden();
+  await expect(guest.getByRole('button', { name: '切换页面目录' })).toHaveAttribute('aria-expanded', 'false');
+  await expandSidebar(page);
+  await page.click('[data-plugin="toc"]');
+  await expect(guest.locator('[data-pagedock-tools]')).toHaveCount(0);
+  results.push('Zen Mode: minimal header, full-width page, hidden chrome and TOC, preserved form and colors, keyboard and button exit, sidebar and TOC restoration, resized viewport');
 
   await guest.locator('#public-controls').click();
   const startScroll = await guest.evaluate(() => scrollY);
@@ -221,6 +271,18 @@ async function addSyntheticControls(page) {
   await expect(guest.getByRole('region', { name: '页面目录' })).toBeVisible();
   await expect.poll(() => guest.locator('[data-pagedock-tools] .toc-entry').count()).toBeGreaterThan(1);
   await guest.screenshot({ path: path.join(out, 'wiki-toc.png') });
+  await page.click('#zen-toggle');
+  await expect(guest.locator('[data-pagedock-tools]')).toHaveCount(0);
+  await guest.reload();
+  guest = await publicPage(wikiURL);
+  await expect(page.locator('body')).toHaveClass(/zen-mode/);
+  await expect(guest.locator('[data-pagedock-tools]')).toHaveCount(0);
+  await running.evaluate(({ Menu }) => {
+    const item = Menu.getApplicationMenu().getMenuItemById('zen-mode');
+    item.click();
+  });
+  await expect(page.locator('body')).not.toHaveClass(/zen-mode/);
+  await expect(guest.getByRole('region', { name: '页面目录' })).toBeVisible();
   await page.getByRole('button', { name: '打开 Example Domain', exact: true }).click();
   guest = await publicPage();
   await expect(page.locator('#sidebar')).toBeHidden();
@@ -228,6 +290,11 @@ async function addSyntheticControls(page) {
   await page.getByRole('button', { name: '打开 Wikipedia Computer', exact: true }).click();
   await publicPage(wikiURL);
   await expect(page.locator('#sidebar')).toBeHidden();
+  await page.click('#zen-toggle');
+  await running.evaluate(({ Menu }) => Menu.getApplicationMenu().items.flatMap(item => item.submenu?.items || []).find(item => item.label === '新增页面…').click());
+  await expect(page.locator('#editor')).toBeVisible();
+  await expect(page.locator('body')).not.toHaveClass(/zen-mode/);
+  await page.click('#cancel');
   await page.click('#edit');
   await page.click('#remove');
   await page.click('#remove');
@@ -236,10 +303,12 @@ async function addSyntheticControls(page) {
   await page.getByRole('button', { name: '打开 Example Domain', exact: true }).click();
   await publicPage();
   await expandSidebar(page);
+  await page.click('#zen-toggle');
   await running.close();
   running = null;
   page = await launch();
   guest = await publicPage();
+  await expect(page.locator('body')).not.toHaveClass(/zen-mode/);
   await expect(page.locator('#sidebar')).toBeHidden();
   await expect(page.locator('button[data-theme="dark"]')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('[data-plugin="toc"]')).toHaveAttribute('aria-pressed', 'true');
