@@ -45,7 +45,7 @@ async function launch() {
 }
 
 async function publicPage(expectedURL = exampleURL) {
-  await expect.poll(() => running.context().pages().some(page => page.url().startsWith(expectedURL)), { timeout: 30000 }).toBe(true);
+  await expect.poll(() => running.context().pages().some(page => page.url().startsWith(expectedURL)), { timeout: 30000, message: `Waiting for public page: ${expectedURL}` }).toBe(true);
   const page = running.context().pages().find(page => page.url().startsWith(expectedURL));
   await expect(page).toHaveTitle(expectedURL === wikiURL ? /Computer.*Wikipedia/ : 'Example Domain', { timeout: 30000 });
   await expect(page.locator('body')).toContainText(expectedURL === wikiURL ? 'Computer' : 'documentation examples', { timeout: 30000 });
@@ -175,10 +175,14 @@ async function addSyntheticControls(page) {
   await guest.keyboard.press('?');
   await expect(guest.getByRole('region', { name: 'Vimium Lite 快捷键' })).toBeVisible();
   await guest.keyboard.press('Escape');
-  await guest.locator('#public-controls').evaluate(element => element.scrollIntoView({ block: 'start' }));
+  await guest.locator('#public-controls').evaluate(async element => {
+    element.scrollIntoView({ block: 'start', behavior: 'instant' });
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  });
   await guest.keyboard.press('f');
   const code = await guest.locator('[data-pagedock-tools] .hint').first().textContent();
   await guest.screenshot({ path: path.join(out, 'vimium.png') });
+  await expect(guest.locator('[data-pagedock-tools] .hint').first()).toBeVisible();
   await guest.keyboard.type(code.toLowerCase());
   await expect(guest.locator('#public-action')).toHaveAttribute('data-clicked', 'true');
   await page.click('[data-plugin="toc"]');
@@ -255,13 +259,14 @@ async function addSyntheticControls(page) {
   assert.deepEqual(errors, []);
   console.log(JSON.stringify({ passed: results, publicPages: [exampleURL, wikiURL], rendererErrors: errors }, null, 2));
 })().catch(async error => {
+  console.error('Completed checks:', results);
   if (running) {
     const diagnostic = await running.evaluate(({ webContents }) => webContents.getAllWebContents().filter(wc => /^https:\/\/(example\.com|en\.wikipedia\.org)\//.test(wc.getURL())).map(wc => ({ title: wc.getTitle(), loading: wc.isLoading(), type: wc.getType() }))).catch(() => []);
     console.error('Public page diagnostics:', diagnostic);
     const shell = running.context().pages().find(page => page.url().startsWith('file:'));
     if (shell) {
-      const failure = await shell.evaluate(() => window.pages.state().then(state => state.failure)).catch(() => 'Application state unavailable');
-      console.error('Public page status:', failure || 'No application load error');
+      const status = await shell.evaluate(() => window.pages.state().then(state => ({ failure: state.failure, activePage: Boolean(state.activeId), savedPages: state.sites.length }))).catch(() => 'Application state unavailable');
+      console.error('Public page status:', status);
     }
     const guest = running.context().pages().find(page => page.url().startsWith(exampleURL) || page.url().startsWith(wikiURL));
     if (guest) await guest.screenshot({ path: path.join(out, 'public-page-failure.png'), timeout: 3000 }).catch(() => {});
