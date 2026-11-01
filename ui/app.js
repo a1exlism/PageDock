@@ -41,6 +41,9 @@ function render(next) {
   const active = state.sites.find(site => site.id === state.activeId);
   const collapsed = state.sidebarWidth === 0;
   document.documentElement.style.setProperty('--sidebar-width', `${state.sidebarWidth}px`);
+  document.documentElement.style.setProperty('--header-height', `${state.headerHeight}px`);
+  document.body.classList.toggle('zen-mode', state.zenMode);
+  $('zen-bar').hidden = !state.zenMode;
   document.body.classList.toggle('sidebar-collapsed', collapsed);
   document.body.classList.toggle('has-active-page', Boolean(active));
   $('sidebar').hidden = collapsed;
@@ -128,6 +131,7 @@ for (const id of ['brand', 'overview']) $(id).addEventListener('click', () => se
 $('editor').addEventListener('cancel', event => { event.preventDefault(); closeEditor(); });
 $('search').addEventListener('input', () => render(state));
 $('sidebar-toggle').addEventListener('click', () => window.pages.sidebar().then(render).catch(showError));
+for (const id of ['zen-toggle', 'zen-exit']) $(id).addEventListener('click', () => window.pages.zen().then(render).catch(showError));
 for (const button of document.querySelectorAll('button[data-theme]')) {
   button.addEventListener('click', () => window.pages.theme(button.dataset.theme).then(render).catch(showError));
 }

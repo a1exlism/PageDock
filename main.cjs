@@ -20,6 +20,7 @@ let overlay = false;
 let failure = '';
 let quitting = false;
 let sidebarCollapsed = false;
+let zenMode = false;
 const sidebarExpandedWidth = 244;
 const popups = new Set();
 const guests = new Set();
@@ -30,13 +31,13 @@ function resolvedTheme() {
   return store.state.theme === 'system' ? (nativeTheme.shouldUseDarkColors ? 'dark' : 'light') : store.state.theme;
 }
 
-function toolOptions() {
-  return { ...store.state.plugins, theme: resolvedTheme() };
+function toolOptions(wc) {
+  return { ...store.state.plugins, theme: resolvedTheme(), zen: zenMode && wc === view?.webContents };
 }
 
 function updateTools() {
   for (const wc of guests) {
-    if (!wc.isDestroyed()) wc.send('guest:tools-update', toolOptions());
+    if (!wc.isDestroyed()) wc.send('guest:tools-update', toolOptions(wc));
   }
 }
 
@@ -50,7 +51,9 @@ function currentState() {
   return {
     ...store.state,
     resolvedTheme: resolvedTheme(),
-    sidebarWidth: sidebarCollapsed ? 0 : sidebarExpandedWidth,
+    sidebarWidth: zenMode || sidebarCollapsed ? 0 : sidebarExpandedWidth,
+    headerHeight: zenMode ? 32 : 88,
+    zenMode,
     url: wc && !wc.isDestroyed() ? wc.getURL() || active?.url || '' : '',
     loading: wc && !wc.isDestroyed() ? wc.isLoading() : false,
     canBack: wc && !wc.isDestroyed() ? wc.navigationHistory.canGoBack() : false,
@@ -60,7 +63,29 @@ function currentState() {
 }
 
 function emitState() {
+  const zenItem = Menu.getApplicationMenu()?.getMenuItemById('zen-mode');
+  if (zenItem) {
+    zenItem.checked = zenMode;
+    zenItem.enabled = Boolean(view) && !overlay;
+  }
   if (win && !win.isDestroyed()) win.webContents.send('pages:changed', currentState());
+}
+
+function setZenMode(enabled) {
+  zenMode = Boolean(enabled && view && !overlay);
+  layout();
+  updateTools();
+  emitState();
+  if (view && !overlay && !failure) view.webContents.focus();
+  return currentState();
+}
+
+function handleZenShortcut(event, input) {
+  const modifier = process.platform === 'darwin' ? input.meta && !input.control : input.control && !input.meta;
+  if (input.type === 'keyDown' && input.key === 'Enter' && modifier && input.shift && !input.alt) {
+    event.preventDefault();
+    if (!input.isAutoRepeat) setZenMode(!zenMode);
+  }
 }
 
 function updateAppearance() {
@@ -71,10 +96,12 @@ function updateAppearance() {
 }
 
 function layout() {
-  if (!view || !win) return;
+  if (!win) return;
+  if (process.platform === 'darwin') win.setWindowButtonVisibility(!zenMode);
+  if (!view) return;
   const [width, height] = win.getContentSize();
-  const sidebarWidth = sidebarCollapsed ? 0 : sidebarExpandedWidth;
-  view.setBounds({ x: sidebarWidth, y: 88, width: Math.max(1, width - sidebarWidth), height: Math.max(1, height - 88) });
+  const { sidebarWidth, headerHeight } = currentState();
+  view.setBounds({ x: sidebarWidth, y: headerHeight, width: Math.max(1, width - sidebarWidth), height: Math.max(1, height - headerHeight) });
   view.setVisible(!overlay && !failure);
 }
 
@@ -114,6 +141,8 @@ function openSite(id) {
   const site = store.state.sites.find(item => item.id === id);
   sidebarCollapsed = Boolean(site);
   if (!site) {
+    zenMode = false;
+    layout();
     win.setTitle(app.name);
     emitState();
     return;
@@ -124,6 +153,7 @@ function openSite(id) {
   win.contentView.addChildView(view);
   const wc = view.webContents;
   secureGuest(wc);
+  wc.on('before-input-event', handleZenShortcut);
   wc.on('did-start-loading', () => { failure = ''; layout(); emitState(); });
   for (const event of ['did-stop-loading', 'did-navigate', 'did-navigate-in-page']) wc.on(event, emitState);
   wc.on('did-fail-load', (_event, code, description, _url, mainFrame) => {
@@ -165,10 +195,11 @@ function registerIPC() {
     if (!guests.has(event.sender) || event.senderFrame !== event.sender.mainFrame || !isWebURL(event.senderFrame.url)) {
       throw new Error('请求来源不受信任。');
     }
-    return toolOptions();
+    return toolOptions(event.sender);
   });
   const actions = {
     state: () => currentState(),
+    zen: () => setZenMode(!zenMode),
     sidebar: () => {
       sidebarCollapsed = store.state.activeId ? !sidebarCollapsed : false;
       layout();
@@ -204,7 +235,13 @@ function registerIPC() {
       return currentState();
     },
     navigate: (_event, action) => navigate(action),
-    editor: (_event, open) => { overlay = open === true; layout(); }
+    editor: (_event, open) => {
+      overlay = open === true;
+      if (overlay) zenMode = false;
+      layout();
+      updateTools();
+      emitState();
+    }
   };
   for (const [name, action] of Object.entries(actions)) {
     ipcMain.handle(`pages:${name}`, async (event, ...args) => {
@@ -218,6 +255,7 @@ function registerIPC() {
 
 function createWindow() {
   overlay = false;
+  zenMode = false;
   sidebarCollapsed = Boolean(store.state.activeId);
   win = new BrowserWindow({
     width: 1240, height: 820, minWidth: 860, minHeight: 600, title: app.name,
@@ -226,6 +264,7 @@ function createWindow() {
     webPreferences: { sandbox: true, nodeIntegration: false, contextIsolation: true, preload: path.join(__dirname, 'preload.cjs') }
   });
   win.webContents.on('will-navigate', event => event.preventDefault());
+  win.webContents.on('before-input-event', handleZenShortcut);
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.on('resize', layout);
   win.on('close', () => { releaseView(); });
@@ -261,6 +300,7 @@ function setupMenu() {
     { label: '文件', submenu: [{ label: '新增页面…', accelerator: 'CmdOrCtrl+N', click: () => { if (!win) createWindow(); win.webContents.send('pages:add'); } }, { role: 'close', label: '关闭窗口' }] },
     { label: '编辑', submenu: [{ role: 'undo', label: '撤销' }, { role: 'redo', label: '重做' }, { type: 'separator' }, { role: 'cut', label: '剪切' }, { role: 'copy', label: '复制' }, { role: 'paste', label: '粘贴' }, { role: 'selectAll', label: '全选' }] },
     { label: '浏览', submenu: [{ label: '后退', accelerator: 'CmdOrCtrl+[', click: () => navigate('back') }, { label: '前进', accelerator: 'CmdOrCtrl+]', click: () => navigate('forward') }, { label: '刷新', accelerator: 'CmdOrCtrl+R', click: () => navigate('reload') }, { label: '打开保存的网址', click: () => navigate('home') }, { type: 'separator' }, { role: 'zoomIn', label: '放大' }, { role: 'zoomOut', label: '缩小' }, { role: 'resetZoom', label: '实际大小' }, { role: 'togglefullscreen', label: '切换全屏' }, { label: '网页开发者工具', accelerator: 'Alt+CmdOrCtrl+I', click: () => view?.webContents.openDevTools({ mode: 'detach' }) }] },
+    { label: '专注', submenu: [{ id: 'zen-mode', label: 'Zen Mode', type: 'checkbox', enabled: false, accelerator: 'CmdOrCtrl+Shift+Enter', click: () => setZenMode(!zenMode) }] },
     { role: 'windowMenu', label: '窗口' }
   ]));
 }
