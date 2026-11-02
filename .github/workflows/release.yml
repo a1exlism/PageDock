@@ -1,0 +1,166 @@
+name: Build and release
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 20
+    outputs:
+      product: ${{ steps.metadata.outputs.product }}
+      version: ${{ steps.metadata.outputs.version }}
+      tag: ${{ steps.metadata.outputs.tag }}
+      archive: ${{ steps.metadata.outputs.archive }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Read release metadata
+        id: metadata
+        run: |
+          python3 - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          package = json.loads(Path('package.json').read_text())
+          product, version = package['productName'], package['version']
+          assert re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]*', product)
+          assert re.fullmatch(r'\d+\.\d+\.\d+', version)
+          values = {
+              'product': product,
+              'version': version,
+              'tag': f"v{version}+build.{os.environ['GITHUB_RUN_NUMBER']}",
+              'archive': f'{product}-{version}-macOS-arm64.zip',
+              'bundle': f'tmp/dist/{product}-darwin-arm64/{product}.app',
+          }
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              for key, value in values.items():
+                  output.write(f'{key}={value}\n')
+          PY
+      - name: Install dependencies
+        run: npm ci
+      - name: Unit tests
+        run: npm test
+      - name: Build and sign
+        run: npm run build -- tmp/dist
+      - name: Test packaged app on public pages
+        env:
+          BUNDLE: ${{ steps.metadata.outputs.bundle }}
+          PRODUCT: ${{ steps.metadata.outputs.product }}
+        run: npm run test:app -- tmp/test-results "$BUNDLE/Contents/MacOS/$PRODUCT"
+      - name: Verify runtime file allowlist
+        env:
+          BUNDLE: ${{ steps.metadata.outputs.bundle }}
+        run: |
+          node --input-type=module - <<'JS'
+          import { readFileSync } from 'node:fs';
+          import { listPackage, statFile } from '@electron/asar';
+          import { deepStrictEqual } from 'node:assert';
+          const pkg = JSON.parse(readFileSync('package.json'));
+          const archive = `${process.env.BUNDLE}/Contents/Resources/app.asar`;
+          const files = listPackage(archive).map(file => file.replace(/^\//, ''))
+            .filter(file => !statFile(archive, file).files).sort();
+          deepStrictEqual(files, ['package.json', pkg.main, ...pkg.files].sort());
+          JS
+      - name: Archive and verify
+        env:
+          BUNDLE: ${{ steps.metadata.outputs.bundle }}
+          ARCHIVE: ${{ steps.metadata.outputs.archive }}
+          PRODUCT: ${{ steps.metadata.outputs.product }}
+        run: |
+          set -euo pipefail
+          mkdir -p tmp/release
+          ditto -c -k --norsrc --keepParent "$BUNDLE" "tmp/release/$ARCHIVE"
+          python3 - <<'PY'
+          import hashlib, os, zipfile
+          from pathlib import Path, PurePosixPath
+          directory = Path('tmp/release')
+          archive = directory / os.environ['ARCHIVE']
+          with zipfile.ZipFile(archive) as package:
+              assert package.testzip() is None
+              for name in package.namelist():
+                  parts = PurePosixPath(name).parts
+                  assert parts[0] == os.environ['PRODUCT'] + '.app'
+                  assert not any(part in ('..', '.DS_Store', '__MACOSX', 'PaxHeader') or part.startswith('._') for part in parts)
+          digest = hashlib.sha256()
+          with archive.open('rb') as source:
+              for block in iter(lambda: source.read(1024 * 1024), b''):
+                  digest.update(block)
+          (directory / 'SHA256SUMS').write_text(f'{digest.hexdigest()}  {archive.name}\n')
+          PY
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: macos-release
+          path: tmp/release/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+          overwrite: true
+
+  release:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: macos-release
+          path: release
+      - name: Publish verified release
+        working-directory: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PRODUCT: ${{ needs.build.outputs.product }}
+          VERSION: ${{ needs.build.outputs.version }}
+          TAG: ${{ needs.build.outputs.tag }}
+          ARCHIVE: ${{ needs.build.outputs.archive }}
+        run: |
+          set -euo pipefail
+          sha256sum --check SHA256SUMS
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          base = f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}"
+          sha = os.environ['GITHUB_SHA']
+          Path('release-notes.md').write_text(
+              f"Automated Apple Silicon build from [{sha[:7]}]({base}/commit/{sha}).\n\n"
+              "Download the macOS arm64 ZIP, extract it, and move the app into Applications. "
+              "SHA256SUMS contains the download checksum.\n\n"
+              "This build is ad-hoc signed. It does not include Apple Developer ID signing or notarization.\n"
+          )
+          PY
+          if draft=$(gh release view "$TAG" --json isDraft --jq '.isDraft' 2>/dev/null); then
+            target=$(gh release view "$TAG" --json targetCommitish --jq '.targetCommitish')
+            test "$target" = "$GITHUB_SHA"
+            if [ "$draft" = false ]; then
+              printf '%s\n' 'This release is already published; leaving its assets unchanged.'
+              exit 0
+            fi
+          else
+            gh release create "$TAG" --draft --target "$GITHUB_SHA" \
+              --title "$PRODUCT $VERSION · build $GITHUB_RUN_NUMBER" --notes-file release-notes.md
+          fi
+          gh release upload "$TAG" "$ARCHIVE" SHA256SUMS --clobber
+          latest=false
+          branch_sha=$(gh api "repos/$GH_REPO/git/ref/heads/$GITHUB_REF_NAME" --jq '.object.sha')
+          if [ "$branch_sha" = "$GITHUB_SHA" ]; then latest=true; fi
+          gh release edit "$TAG" --draft=false --latest="$latest"

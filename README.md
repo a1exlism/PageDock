@@ -65,6 +65,14 @@ npm run build -- ./tmp/dist
 
 产物位于 `tmp/dist/PageDock-darwin-arm64/PageDock.app`，可拖入「应用程序」目录。构建使用本地签名，不包含 Apple Developer ID 签名或公证。输出目录中已有同名产物时，构建会停止，需选择新的输出目录。
 
+## 自动构建与 Release
+
+推送到 `main` 后，GitHub Actions 会执行单元测试、构建应用、运行隔离的公开页面测试，并创建包含 macOS arm64 ZIP 和 `SHA256SUMS` 的 Release。可从仓库的 [Releases 页面](https://github.com/a1exlism/PageDock/releases) 下载；解压后将 App 放入「应用程序」目录。
+
+每次构建使用 `v<版本号>+build.<构建编号>` 标签，指向触发构建的提交，不覆盖已经公开的 Release。仅当前主分支提交的构建会被标记为 Latest；失败时不公开 Release。拉取请求执行相同构建检查，但不创建 Release，也可以在 Actions 页面手动运行工作流。
+
+流程只上传应用压缩包和校验文件，不上传测试配置、截图或日志。构建任务只有读取权限，发版任务单独使用 GitHub 提供的临时凭据；无需配置个人访问令牌。自动构建沿用本地签名，不包含 Apple Developer ID 签名或公证。
+
 ## 本地数据与隐私
 
 默认数据目录为 `~/Library/Application Support/WebpageApp/`，其中保存页面网址、外观与插件设置，以及 Chromium 的 Cookie、缓存和本地存储。测试可通过绝对路径环境变量 `WEBPAGE_APP_DATA_DIR` 指定独立目录。
