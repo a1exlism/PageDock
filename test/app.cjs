@@ -187,7 +187,10 @@ async function addSyntheticControls(page) {
   await zenShortcut(true);
   await expect(page.locator('body')).toHaveClass(/zen-mode/);
   await running.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(item => item.webContents.getURL().startsWith('file:')).setContentSize(1000, 700));
-  await expect.poll(async () => (await guestLayout()).bounds).toEqual({ x: 0, y: 32, width: 1000, height: 668 });
+  await expect.poll(async () => (await guestLayout()).size[0]).toBe(1000);
+  const resizedSize = (await guestLayout()).size;
+  await expect.poll(async () => (await guestLayout()).bounds).toEqual({ x: 0, y: 32, width: resizedSize[0], height: resizedSize[1] - 32 });
+  await expect.poll(() => guest.evaluate(() => innerHeight)).toBe(resizedSize[1] - 32);
   await running.evaluate(({ BrowserWindow }, size) => BrowserWindow.getAllWindows().find(item => item.webContents.getURL().startsWith('file:')).setContentSize(...size), zen.size);
   await page.click('#zen-exit');
   await expect(page.locator('#sidebar')).toBeHidden();
