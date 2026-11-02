@@ -12,7 +12,12 @@ function icon(name) {
   return svg;
 }
 
-function host(url) { try { return new URL(url).host; } catch { return url; } }
+function displayAddress(value, compact = false) {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'file:' ? `${decodeURIComponent(url.pathname)}${url.search}${url.hash}` : compact ? url.host : value;
+  } catch { return value; }
+}
 
 function badge(name) {
   const el = document.createElement('span');
@@ -55,7 +60,7 @@ function render(next) {
     button.setAttribute('aria-pressed', String(state.plugins[button.dataset.plugin]));
   }
   const query = $('search').value.trim().toLocaleLowerCase();
-  const filtered = state.sites.filter(site => `${site.name} ${site.url}`.toLocaleLowerCase().includes(query));
+  const filtered = state.sites.filter(site => `${site.name} ${site.url} ${displayAddress(site.url)}`.toLocaleLowerCase().includes(query));
   $('sites').replaceChildren();
   $('cards').replaceChildren();
   for (const site of filtered) {
@@ -63,13 +68,13 @@ function render(next) {
     row.className = `site-row${site.id === state.activeId ? ' selected' : ''}`;
     row.setAttribute('aria-label', `打开 ${site.name}`);
     row.setAttribute('aria-current', site.id === state.activeId ? 'page' : 'false');
-    row.title = site.url;
+    row.title = displayAddress(site.url);
     const info = document.createElement('span');
     info.className = 'site-info';
     const name = document.createElement('strong');
     name.textContent = site.name;
     const url = document.createElement('small');
-    url.textContent = host(site.url);
+    url.textContent = displayAddress(site.url, true);
     info.append(name, url);
     row.append(badge(site.name), info);
     row.addEventListener('click', () => select(site.id));
@@ -92,8 +97,12 @@ function render(next) {
   $('failure').hidden = !active || !state.failure;
   $('failure-detail').textContent = state.failure || '';
   $('page-name').textContent = active?.name || '';
-  $('location').textContent = state.url || active?.url || '';
-  $('location').title = state.url || '';
+  const address = state.url || active?.url || '';
+  $('location').textContent = displayAddress(address);
+  $('location').title = displayAddress(address);
+  const external = document.querySelector('[data-action="external"]');
+  external.title = address.startsWith('file:') ? '在 Finder 中显示' : '在默认浏览器中打开';
+  external.setAttribute('aria-label', external.title);
   $('back').disabled = !state.canBack;
   $('forward').disabled = !state.canForward;
   $('loading').hidden = !state.loading;

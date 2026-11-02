@@ -166,7 +166,7 @@ if (process.isMainFrame) {
     if (match) {
       const element = match.element;
       clearHints();
-      if (openInNewWindow && element instanceof HTMLAnchorElement && /^https?:/.test(element.href)) {
+      if (openInNewWindow && element instanceof HTMLAnchorElement && /^(https?|file):/.test(element.href)) {
         window.open(element.href, '_blank', 'noopener');
       } else {
         element.focus({ preventScroll: true });
@@ -305,7 +305,7 @@ if (process.isMainFrame) {
   }
 
   window.addEventListener('DOMContentLoaded', async () => {
-    if (!/^https?:/.test(location.protocol)) return;
+    if (!/^(https?|file):/.test(location.protocol)) return;
     ipcRenderer.on('guest:tools-update', (_event, next) => applyOptions(next));
     try { applyOptions(await ipcRenderer.invoke('guest:tools')); } catch {}
   }, { once: true });

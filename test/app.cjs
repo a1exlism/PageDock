@@ -124,6 +124,16 @@ async function addSyntheticControls(page) {
   await page.screenshot({ path: path.join(out, 'light.png') });
   await page.click('button[data-theme="dark"]');
 
+  await page.click('#header-add');
+  await expect(page.getByLabel('网址或文件路径')).toBeVisible();
+  await page.fill('#name-input', 'Synthetic relative path');
+  await page.fill('#url-input', './guide.html');
+  await page.click('#save');
+  await expect(page.locator('#form-error')).toContainText('完整文件路径');
+  assert.equal((await page.evaluate(() => window.pages.state())).sites.length, 0);
+  await page.click('#cancel');
+  results.push('relative file paths are rejected in the editor without loading or saving a local page');
+
   let guest = await addPublicPage(page, 'Example Domain', exampleURL);
   await expect(page.locator('#sidebar')).toBeHidden();
   await expect(page.getByRole('button', { name: '展开侧边栏', exact: true })).toBeVisible();

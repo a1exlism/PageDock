@@ -68,21 +68,21 @@
       <div class="hero-mark"><svg><use href="#i-page"/></svg><span class="orbit"></span></div>
       <p class="eyebrow">A LITTLE SPACE FOR YOUR WEB</p>
       <h2>常用网页，<br><span>独立打开。</span></h2>
-      <p class="hero-copy">给网页一个名字，把它留在手边。<br>本地服务、工作面板，或每天都会打开的网站。</p>
+      <p class="hero-copy">给页面一个名字，把它留在手边。<br>本地文件、开发服务，或每天都会打开的网站。</p>
       <button id="hero-add" class="primary-button">添加第一个页面<svg><use href="#i-arrow"/></svg></button>
-      <div class="examples"><span>localhost</span><span>局域网</span><span>任何网站</span></div>
+      <div class="examples"><span>localhost</span><span>本地文件</span><span>任何网站</span></div>
       <div class="welcome-foot"><span>自己的窗口</span><i></i><span>自己的登录空间</span><i></i><span>专注眼前的页面</span></div>
     </section>
     <section id="library" class="library" hidden><div class="library-heading"><div><p class="eyebrow">SAVED PAGES</p><h2>从这里继续。</h2></div><p>选择页面，即刻打开</p></div><div id="cards" class="cards"></div></section>
-    <section id="failure" class="failure" hidden><span class="failure-icon">!</span><h2>暂时无法打开页面</h2><p>如果是本地地址，请确认对应服务已经启动，<br>并检查网址和端口。</p><code id="failure-detail"></code><div><button id="retry" class="primary-button">重新加载</button><button id="failure-edit" class="quiet-button">编辑网址</button></div></section>
+    <section id="failure" class="failure" hidden><span class="failure-icon">!</span><h2>暂时无法打开页面</h2><p>请检查网址、端口或文件路径。<br>本地服务需要先启动，本地文件需要存在且可读取。</p><code id="failure-detail"></code><div><button id="retry" class="primary-button">重新加载</button><button id="failure-edit" class="quiet-button">编辑地址</button></div></section>
   </main>
   <dialog id="editor" aria-labelledby="editor-title">
     <form id="form" novalidate>
       <div class="dialog-heading"><span class="eyebrow">YOUR NEXT PAGE</span><button type="button" id="close-editor" class="icon-button" aria-label="关闭"><svg><use href="#i-close"/></svg></button></div>
-      <h2 id="editor-title">新增页面</h2><p class="dialog-copy">保存名称和网址，下次从侧边栏直接打开。</p>
+      <h2 id="editor-title">新增页面</h2><p class="dialog-copy">保存名称和页面地址，下次从侧边栏直接打开。</p>
       <label class="field">页面名称<input id="name-input" name="name" placeholder="例如：开发面板" maxlength="80" required autocomplete="off"></label>
-      <label class="field">网址<input id="url-input" name="url" placeholder="localhost:3000 或 https://example.com" required autocomplete="off" spellcheck="false"></label>
-      <p class="field-hint">本地地址会自动使用 HTTP，其他地址默认使用 HTTPS。</p>
+      <label class="field">网址或文件路径<input id="url-input" name="url" placeholder="https://example.com 或 ~/Documents/index.html" required autocomplete="off" spellcheck="false"></label>
+      <p class="field-hint">支持完整路径、~/ 和 file:/// 地址。本地服务默认 HTTP，网站默认 HTTPS。</p>
       <p id="form-error" class="form-error" role="alert"></p>
       <div class="form-footer"><button type="button" id="remove" class="danger-button" hidden>移除页面</button><span></span><button type="button" id="cancel" class="quiet-button">取消</button><button id="save" type="submit" class="primary-button">保存并打开<svg><use href="#i-arrow"/></svg></button></div>
       <p id="remove-note" class="remove-note" hidden>移除页面只删除列表条目，网站登录数据会保留。</p>

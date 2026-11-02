@@ -1,15 +1,52 @@
 const fs = require('node:fs');
 const { randomUUID } = require('node:crypto');
+const os = require('node:os');
+const path = require('node:path');
+const { fileURLToPath, pathToFileURL } = require('node:url');
 
-function normalizeURL(input) {
+function normalizeFileURL(value) {
+  const url = new URL(value);
+  if (!/^file:\//i.test(value) || url.protocol !== 'file:') throw new Error('文件地址格式不正确。');
+  const pathname = fileURLToPath(url);
+  if (pathname.includes('\0')) throw new Error('文件路径不能包含空字符。');
+  const normalized = pathToFileURL(pathname);
+  normalized.search = url.search;
+  normalized.hash = url.hash;
+  return normalized.href;
+}
+
+function isWebURL(value) {
+  try { return ['http:', 'https:'].includes(new URL(value).protocol); } catch { return false; }
+}
+
+function isLocalFileURL(value) {
+  try { normalizeFileURL(value); return true; } catch { return false; }
+}
+
+function canNavigateURL(target, source) {
+  return isWebURL(target) || target === 'about:blank' || (isLocalFileURL(source) && isLocalFileURL(target));
+}
+
+function normalizeURL(input, homeDirectory = os.homedir()) {
   if (typeof input !== 'string' || !input.trim() || input.length > 8192) {
-    throw new Error('请输入有效的网址。');
+    throw new Error('请输入有效的网址或文件路径。');
   }
   let value = input.trim();
+  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
+  if (!value || /[\x00-\x1f\x7f]/.test(value)) throw new Error('网址或文件路径包含无效字符。');
+  if (value.startsWith('/') || value.startsWith('~/')) {
+    return pathToFileURL(value.startsWith('~/') ? path.join(homeDirectory, value.slice(2)) : value).href;
+  }
+  if (/^file:/i.test(value)) {
+    try { return normalizeFileURL(value); } catch { throw new Error('请输入有效的本机 file:/// 文件地址。'); }
+  }
+  if (/^\.{1,2}(?:\/|$)/.test(value) || value.startsWith('~')) {
+    throw new Error('请使用完整文件路径（以 / 或 ~/ 开头），不支持相对路径。');
+  }
   if (!/^https?:\/\//i.test(value)) {
     const local = /^(?:localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2}|\[::1\])(?::\d+)?(?:[/?#]|$)/i.test(value);
     if (/^[a-z][a-z\d+.-]*:/i.test(value) && !/^[^/:]+:\d+(?:[/?#]|$)/.test(value) && !local) {
-      throw new Error('仅支持 http:// 或 https:// 网页。');
+      throw new Error('仅支持 HTTP、HTTPS 网页或本机文件路径。');
     }
     value = `${local ? 'http' : 'https'}://${value}`;
   }
@@ -81,4 +118,4 @@ class Store {
   }
 }
 
-module.exports = { normalizeURL, validateSite, Store };
+module.exports = { normalizeURL, isWebURL, isLocalFileURL, canNavigateURL, validateSite, Store };

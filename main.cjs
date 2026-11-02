@@ -1,8 +1,8 @@
 const { app, BrowserWindow, WebContentsView, ipcMain, Menu, dialog, session, shell, nativeTheme } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
-const { pathToFileURL } = require('node:url');
-const { Store } = require('./model.cjs');
+const { fileURLToPath, pathToFileURL } = require('node:url');
+const { Store, isWebURL, isLocalFileURL, canNavigateURL } = require('./model.cjs');
 
 app.setName('PageDock');
 const dataDir = process.env.WEBPAGE_APP_DATA_DIR;
@@ -39,10 +39,6 @@ function updateTools() {
   for (const wc of guests) {
     if (!wc.isDestroyed()) wc.send('guest:tools-update', toolOptions(wc));
   }
-}
-
-function isWebURL(value) {
-  try { return ['http:', 'https:'].includes(new URL(value).protocol); } catch { return false; }
 }
 
 function currentState() {
@@ -109,13 +105,13 @@ function secureGuest(wc) {
   guests.add(wc);
   wc.once('destroyed', () => guests.delete(wc));
   wc.on('will-navigate', (event, url) => {
-    if (!isWebURL(url) && url !== 'about:blank') event.preventDefault();
+    if (!canNavigateURL(url, event.initiator?.url || wc.getURL())) event.preventDefault();
   });
   wc.on('will-redirect', (event, url) => {
     if (!isWebURL(url) && url !== 'about:blank') event.preventDefault();
   });
-  wc.setWindowOpenHandler(({ url }) => ({
-    action: isWebURL(url) || url === 'about:blank' ? 'allow' : 'deny',
+  wc.setWindowOpenHandler(({ url, referrer }) => ({
+    action: canNavigateURL(url, wc.getURL()) && canNavigateURL(url, referrer.url || wc.getURL()) ? 'allow' : 'deny',
     overrideBrowserWindowOptions: {
       width: 1000, height: 760, autoHideMenuBar: true, backgroundColor: '#ffffff',
       webPreferences: guestPreferences
@@ -185,14 +181,19 @@ function navigate(action) {
       if (site) wc.loadURL(site.url).catch(() => {});
       break;
     }
-    case 'external': if (isWebURL(wc.getURL())) return shell.openExternal(wc.getURL()); break;
+    case 'external': {
+      const url = wc.getURL() || store.state.sites.find(item => item.id === store.state.activeId)?.url;
+      if (isLocalFileURL(url)) return shell.showItemInFolder(fileURLToPath(url));
+      if (isWebURL(url)) return shell.openExternal(url);
+      break;
+    }
     default: throw new Error('不支持的操作。');
   }
 }
 
 function registerIPC() {
   ipcMain.handle('guest:tools', event => {
-    if (!guests.has(event.sender) || event.senderFrame !== event.sender.mainFrame || !isWebURL(event.senderFrame.url)) {
+    if (!guests.has(event.sender) || event.senderFrame !== event.sender.mainFrame || !(isWebURL(event.senderFrame.url) || isLocalFileURL(event.senderFrame.url))) {
       throw new Error('请求来源不受信任。');
     }
     return toolOptions(event.sender);
